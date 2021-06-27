@@ -26,12 +26,14 @@ def db_uploader(file_name):
     ''' 
     conn = pymysql.connect(host='mysql', user='root', charset='utf8') 
     cursor = conn.cursor(pymysql.cursors.DictCursor)
+    sql = 'CREATE DATABASE IF NOT EXISTS dacon;'
+    cursor.execute(sql) 
+
     sql = "USE dacon;" 
     cursor.execute(sql) 
-    cursor.execute(creat_test_img_sql) 
-
     sql = f"INSERT INTO test_img (file_name) VALUES ('{file_name}');"
     cursor.execute(sql)
+    conn.commit()
 
 def object_detection(file_name):
     image_path = './static/uploads/'
@@ -42,8 +44,10 @@ def object_detection(file_name):
     data = json.dumps({"signature_name": "serving_default", "instances": img.numpy().tolist()})
 
     headers = {"content-type": "application/json"}
-    json_response = requests.post('http://host.docker.internal:8501/v1/models/frcnn:predict', data=data, headers=headers)
-    
+    # json_response = requests.post('http://host.docker.internal:8501/v1/models/frcnn:predict', data=data, headers=headers)
+    json_response = requests.post('http://172.17.0.1:8501/v1/models/frcnn:predict', data=data, headers=headers)
+
+
     predictions = json.loads(json_response.text)['predictions']
 
     max_output_size = 3
@@ -95,4 +99,4 @@ if __name__ == '__main__':
         os.makedirs('./static')
         os.makedirs('./static/uploads')
         os.makedirs('./static/detect')
-    app.run(host='0.0.0.0', port=80)
+    app.run(host='0.0.0.0', debug=True, port=80)
