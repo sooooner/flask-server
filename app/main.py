@@ -1,4 +1,3 @@
-import os
 from werkzeug.utils import secure_filename
 from flask import Flask, render_template, request
 
@@ -6,7 +5,7 @@ import cv2
 import json
 import pymysql
 import requests
-import tensorflow as tf
+import numpy as np
 import matplotlib.pyplot as plt
 
 def anchor_to_coordinate(box):    
@@ -36,38 +35,38 @@ def db_uploader(file_name):
     conn.commit()
 
 def object_detection(file_name):
+    global model
     image_path = './static/uploads/'
-    img = tf.io.read_file(image_path + file_name)
-    img = tf.image.decode_jpeg(img, channels=3)
-    img = tf.expand_dims(tf.image.resize(img, [432, 768])/255, 0)
+    img = cv2.imread(image_path + file_name)
+    img = np.expand_dims(cv2.resize(img, dsize=(768,432))/255, axis=0)
 
-    data = json.dumps({"signature_name": "serving_default", "instances": img.numpy().tolist()})
+    data = json.dumps({"signature_name": "serving_default", "instances": img.tolist()})
 
     headers = {"content-type": "application/json"}
     # json_response = requests.post('http://host.docker.internal:8501/v1/models/frcnn:predict', data=data, headers=headers)
     json_response = requests.post('http://172.17.0.1:8501/v1/models/frcnn:predict', data=data, headers=headers)
-
+    # # json_response.text
 
     predictions = json.loads(json_response.text)['predictions']
 
     max_output_size = 3
-    img_ = img[0].numpy().copy()
+    img = img[0].numpy().copy()
 
-    scores_order = tf.argsort(predictions[0]['output_1'], direction='DESCENDING', axis=0)
-    boxes = tf.squeeze(tf.gather(predictions[0]['output_2'], scores_order))
+    scores_order = np.argsort(predictions[0]['output_1'], axis=0)[::-1]
+    boxes = np.squeeze(np.take(predictions[0]['output_2'], scores_order, axis=0))
     boxes = boxes[boxes[:, 2] > 16]
     boxes = boxes[boxes[:, 3] > 16][:max_output_size]
-    boxes = tf.math.reduce_mean(boxes, axis=0)
+    boxes = np.mean(boxes, axis=0)
 
     anchor = anchor_to_coordinate(boxes.numpy())
     cv2.rectangle(
-        img_, 
+        img, 
         (int(anchor[0]), int(anchor[2])), (int(anchor[1]), int(anchor[3])), 
         (1, 0, 0), 
         thickness=1
     )
 
-    plt.imshow(img_)
+    plt.imshow(img)
     plt.axis('off')
     plt.savefig(f'./static/detect/{file_name}', dpi=200)
 
@@ -95,8 +94,4 @@ def upload_file():
     return render_template("image.html", img=f)
 
 if __name__ == '__main__':
-    if not os.path.exists('./static'):
-        os.makedirs('./static')
-        os.makedirs('./static/uploads')
-        os.makedirs('./static/detect')
-    app.run(host='0.0.0.0', debug=True, port=80)
+    app.run(host='0.0.0.0', port=80)
