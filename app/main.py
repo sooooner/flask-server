@@ -34,11 +34,48 @@ def db_uploader(file_name):
     cursor.execute(sql)
     conn.commit()
 
+# def object_detection(file_name):
+#     global model
+#     image_path = './static/uploads/'
+#     img = cv2.imread(image_path + file_name)
+#     img = np.expand_dims(cv2.resize(img, dsize=(768,432))/255, axis=0)
+
+#     data = json.dumps({"signature_name": "serving_default", "instances": img.tolist()})
+
+#     headers = {"content-type": "application/json"}
+#     # json_response = requests.post('http://host.docker.internal:8501/v1/models/frcnn:predict', data=data, headers=headers)
+#     json_response = requests.post('http://172.17.0.1:8501/v1/models/frcnn:predict', data=data, headers=headers)
+#     # # json_response.text
+
+#     predictions = json.loads(json_response.text)['predictions']
+
+#     max_output_size = 3
+#     img = img[0].numpy().copy()
+
+#     scores_order = np.argsort(predictions[0]['output_1'], axis=0)[::-1]
+#     boxes = np.squeeze(np.take(predictions[0]['output_2'], scores_order, axis=0))
+#     boxes = boxes[boxes[:, 2] > 16]
+#     boxes = boxes[boxes[:, 3] > 16][:max_output_size]
+#     boxes = np.mean(boxes, axis=0)
+
+#     anchor = anchor_to_coordinate(boxes.numpy())
+#     cv2.rectangle(
+#         img, 
+#         (int(anchor[0]), int(anchor[2])), (int(anchor[1]), int(anchor[3])), 
+#         (1, 0, 0), 
+#         thickness=1
+#     )
+
+#     plt.imshow(img)
+#     plt.axis('off')
+#     plt.savefig(f'./static/detect/{file_name}', dpi=200)
+
 def object_detection(file_name):
     global model
     image_path = './static/uploads/'
-    img = cv2.imread(image_path + file_name)
-    img = np.expand_dims(cv2.resize(img, dsize=(768,432))/255, axis=0)
+    img = cv2.imread(image_path)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    img = np.expand_dims(img, axis=0)
 
     data = json.dumps({"signature_name": "serving_default", "instances": img.tolist()})
 
@@ -49,24 +86,21 @@ def object_detection(file_name):
 
     predictions = json.loads(json_response.text)['predictions']
 
-    max_output_size = 3
-    img = img[0].numpy().copy()
+    img_ = img[0].copy()
+    for anchor in predictions:
+        ymin, xmin, ymax, xmax =anchor
+        ymin *= img_.shape[0]
+        ymax *= img_.shape[0]
+        xmin *= img_.shape[1]
+        xmax *= img_.shape[1]
+        cv2.rectangle(
+            img_, 
+            (int(xmin), int(ymin)), (int(xmax), int(ymax)), 
+            (0, 0, 255), 
+            thickness=2
+        )
 
-    scores_order = np.argsort(predictions[0]['output_1'], axis=0)[::-1]
-    boxes = np.squeeze(np.take(predictions[0]['output_2'], scores_order, axis=0))
-    boxes = boxes[boxes[:, 2] > 16]
-    boxes = boxes[boxes[:, 3] > 16][:max_output_size]
-    boxes = np.mean(boxes, axis=0)
-
-    anchor = anchor_to_coordinate(boxes.numpy())
-    cv2.rectangle(
-        img, 
-        (int(anchor[0]), int(anchor[2])), (int(anchor[1]), int(anchor[3])), 
-        (1, 0, 0), 
-        thickness=1
-    )
-
-    plt.imshow(img)
+    plt.imshow(img_)
     plt.axis('off')
     plt.savefig(f'./static/detect/{file_name}', dpi=200)
 
